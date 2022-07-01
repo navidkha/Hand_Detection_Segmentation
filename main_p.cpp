@@ -28,7 +28,7 @@ static void on_high_H_thresh_trackbar(int, void*)
     setTrackbarPos("High H", window_detection_name, high_H);
 }
 static void on_low_S_thresh_trackbar(int, void*)
-{
+{ 
     low_S = min(high_S - 1, low_S);
     setTrackbarPos("Low S", window_detection_name, low_S);
 }
