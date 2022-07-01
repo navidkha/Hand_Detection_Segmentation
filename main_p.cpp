@@ -28,7 +28,7 @@ static void on_high_H_thresh_trackbar(int, void*)
     setTrackbarPos("High H", window_detection_name, high_H);
 }
 static void on_low_S_thresh_trackbar(int, void*)
-{ 
+{
     low_S = min(high_S - 1, low_S);
     setTrackbarPos("Low S", window_detection_name, low_S);
 }
@@ -161,7 +161,11 @@ void performOpening(Mat binaryImage, int kernelShape, Point kernelSize, Mat binM
     masking(binaryImage, binMask);
 }
 
-void computeThresholds() {
+
+void computeThresholds(Mat source) {
+
+    Mat src_HSV, scr_threshold;
+    cvtColor(source, src_HSV, COLOR_BGR2HSV);
     //choosing between mode, mean and median
     int low_H[] = { 10, 5, 1, 1, 0, 0, 0, 9, 3, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 7, 0, 0 ,9, 0 ,3, 0, 4 };
     int low_S[] = { 76, 20, 31, 75, 14, 40, 25, 10, 0, 24, 60, 75, 47, 40, 39, 75, 55, 63, 55, 64, 65, 68, 105, 72, 66, 62, 61, 62, 62, 121, };
@@ -169,23 +173,16 @@ void computeThresholds() {
     int high_H[] = { 17, 12, 12, 11, 13, 14, 14, 16, 16, 13, 15, 18, 12, 12, 14, 17, 17, 15, 15, 13, 13, 9, 18, 25, 180, 100, 180, 175, 38, 19 };
     int high_S[] = { 183, 117, 113, 116, 114, 186, 184, 168, 148, 126, 148, 150, 117, 116, 144, 236, 135, 155, 138, 102, 104, 66, 66, 173, 104, 96, 145, 81, 47, 171, };
     int high_V[] = { 253, 255, 253, 213, 255, 199, 192, 255, 235, 222, 225, 146, 189, 207, 173, 204, 180, 154, 185, 211, 171, 231, 155, 255, 255, 255, 255, 255, 255, 157 };
-    int total_low_H = accumulate(begin(low_H), end(low_H), 0, plus<int>());
-    int total_low_S = accumulate(begin(low_S), end(low_S), 0, plus<int>());
-    int total_low_V = accumulate(begin(low_V), end(low_V), 0, plus<int>());
-    int total_high_V = accumulate(begin(high_V), end(high_V), 0, plus<int>());
-    int total_high_S = accumulate(begin(high_S), end(high_S), 0, plus<int>());
-    int total_high_H = accumulate(begin(high_H), end(high_H), 0, plus<int>());
-    cout << total_low_H << endl;
-    cout << (int)total_low_H << endl;
     /*cout << sizeof(low_H) / sizeof(low_H[0]);*/
 
     //MEAN
-    thresh_low_H = total_low_H / 30;
-    thresh_low_S = total_low_S / 30;
-    thresh_low_V = total_low_V / 30;
-    thresh_high_V = total_high_V / 30;
-    thresh_high_S = total_high_S / 30;
-    thresh_high_H = total_high_H / 30;
+    thresh_low_H = accumulate(begin(low_H), end(low_H), 0, plus<int>()) / 30;
+    thresh_low_S = accumulate(begin(low_S), end(low_S), 0, plus<int>()) / 30;
+    thresh_low_V = accumulate(begin(low_V), end(low_V), 0, plus<int>()) / 30;
+    thresh_high_V = accumulate(begin(high_V), end(high_V), 0, plus<int>()) / 30;
+    thresh_high_S = accumulate(begin(high_S), end(high_S), 0, plus<int>()) / 30;
+    thresh_high_H = accumulate(begin(high_H), end(high_H), 0, plus<int>()) / 30;
+    inRange(src_HSV, Scalar(thresh_low_H, thresh_low_S, thresh_low_V), Scalar(thresh_high_H, thresh_high_S, thresh_high_V), scr_threshold);
 
     //MEDIAN
     sort(low_H, low_H + (30));
@@ -200,12 +197,14 @@ void computeThresholds() {
     int med_high_H = (high_H[30 / 2] + high_H[(30 / 2) - 1]) / 2;
     int med_high_S = (high_S[30 / 2] + high_S[(30 / 2) - 1]) / 2;
     int med_high_V = (high_V[30 / 2] + high_V[(30 / 2) - 1]) / 2;
+    inRange(src_HSV, Scalar(med_low_H, med_low_S, med_low_V), Scalar(med_high_H, med_high_S, med_high_V), scr_threshold);
 
     //MODE
     //.
     //.
     //.
 
+    
     
 
 
@@ -271,7 +270,7 @@ int main(int argc, char** argv)
         }
         //Mat binarized = binarization(frame_threshold);
         Mat mask = cv::imread("01.png", IMREAD_UNCHANGED);
-        computeThresholds();
+        computeThresholds(src);
         //performOpening(frame_threshold, MORPH_RECT, { 3, 3 }, mask);
 
         //mask = Mat::zeros(frame_threshold.size(), CV_8UC1);
