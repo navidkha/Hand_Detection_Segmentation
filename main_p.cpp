@@ -48,6 +48,7 @@ static void on_high_V_thresh_trackbar(int, void*)
     setTrackbarPos("High V", window_detection_name, high_V);
 }
 
+
 void masking(Mat image, Mat binMask) {
     cv::Mat dstImage = cv::Mat::zeros(image.size(), image.type());
     //binMask = Mat::zeros(image.size(), CV_8UC1);
@@ -59,6 +60,7 @@ void masking(Mat image, Mat binMask) {
     imshow(window_name, dstImage);
     waitKey(0);
 }
+
 
 void findContour(Mat binImage) {
     vector<vector<Point>> contours;
@@ -125,11 +127,8 @@ void findContour(Mat binImage) {
     //// we compact them on their medians
     //vector<Point> filtered_start_points = compactOnNeighborhoodMedian(start_points, bounding_rectangle.height * BOUNDING_RECT_NEIGHBOR_DISTANCE_SCALING);
     //vector<Point> filtered_far_points = compactOnNeighborhoodMedian(far_points, bounding_rectangle.height * BOUNDING_RECT_NEIGHBOR_DISTANCE_SCALING);
-
-
-
-
 }
+
 
 /*After binarization the image resulted a bit noisy, because of false positives.
 To clean the image and remove the false positives, an opening operator is applied,
