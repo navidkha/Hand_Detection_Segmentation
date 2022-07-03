@@ -10,42 +10,42 @@ using namespace std;
 
 const int max_value_H = 360 / 2;
 const int max_value = 255;
-const String window_detection_name = "Object Detection";
+const String window_segmentation_name = "Object Detection";
 int low_H = 0, low_S = 0, low_V = 0;
 int high_H = max_value_H, high_S = max_value, high_V = max_value;
 int thresh_low_H = 0; int thresh_low_S = 0; int thresh_low_V = 0; int thresh_high_H = 0;
 int thresh_high_S = 0; int thresh_high_V = 0;
-
+int med_low_H, med_low_S, med_low_V, med_high_H, med_high_S, med_high_V;
 
 static void on_low_H_thresh_trackbar(int, void*)
 {
     low_H = min(high_H - 1, low_H);
-    setTrackbarPos("Low H", window_detection_name, low_H);
+    setTrackbarPos("Low H", window_segmentation_name, low_H);
 }
 static void on_high_H_thresh_trackbar(int, void*)
 {
     high_H = max(high_H, low_H + 1);
-    setTrackbarPos("High H", window_detection_name, high_H);
+    setTrackbarPos("High H", window_segmentation_name, high_H);
 }
 static void on_low_S_thresh_trackbar(int, void*)
 {
     low_S = min(high_S - 1, low_S);
-    setTrackbarPos("Low S", window_detection_name, low_S);
+    setTrackbarPos("Low S", window_segmentation_name, low_S);
 }
 static void on_high_S_thresh_trackbar(int, void*)
 {
     high_S = max(high_S, low_S + 1);
-    setTrackbarPos("High S", window_detection_name, high_S);
+    setTrackbarPos("High S", window_segmentation_name, high_S);
 }
 static void on_low_V_thresh_trackbar(int, void*)
 {
     low_V = min(high_V - 1, low_V);
-    setTrackbarPos("Low V", window_detection_name, low_V);
+    setTrackbarPos("Low V", window_segmentation_name, low_V);
 }
 static void on_high_V_thresh_trackbar(int, void*)
 {
     high_V = max(high_V, low_V + 1);
-    setTrackbarPos("High V", window_detection_name, high_V);
+    setTrackbarPos("High V", window_segmentation_name, high_V);
 }
 
 
@@ -162,89 +162,108 @@ void performOpening(Mat binaryImage, int kernelShape, Point kernelSize, Mat binM
 }
 
 
-void computeThresholds(Mat source) {
-
-    Mat src_HSV, scr_threshold;
-    cvtColor(source, src_HSV, COLOR_BGR2HSV);
-    //choosing between mode, mean and median
+void computeThresholds() {
     int low_H[] = { 10, 5, 1, 1, 0, 0, 0, 9, 3, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 7, 0, 0 ,9, 0 ,3, 0, 4 };
-    int low_S[] = { 76, 20, 31, 75, 14, 40, 25, 10, 0, 24, 60, 75, 47, 40, 39, 75, 55, 63, 55, 64, 65, 68, 105, 72, 66, 62, 61, 62, 62, 121, };
-    int low_V[] = { 116, 181, 194, 187, 189, 123, 130, 115, 141, 119, 137, 56, 65, 117, 105, 94, 114, 55, 113, 130, 50, 107, 185, 129, 91, 210, 129, 181, 211, 122 };
-    int high_H[] = { 17, 12, 12, 11, 13, 14, 14, 16, 16, 13, 15, 18, 12, 12, 14, 17, 17, 15, 15, 13, 13, 9, 18, 25, 180, 100, 180, 175, 38, 19 };
-    int high_S[] = { 183, 117, 113, 116, 114, 186, 184, 168, 148, 126, 148, 150, 117, 116, 144, 236, 135, 155, 138, 102, 104, 66, 66, 173, 104, 96, 145, 81, 47, 171, };
+    int low_S[] = { 76, 20, 31, 75, 14, 40, 25, 10, 0, 24, 60, 75, 47, 40, 39, 75, 55, 63, 55, 64, 65, 68, /*105,*/ 72, 66, 62, 61, 62, 62, /*121,*/ };
+    int low_V[] = { 116, 181, 194, 187, 189, 123, 130, 115, 141, 119, 137, /*56, 65,*/ 117, 105, 94, 114, /*55,*/ 113, 130, /*50,*/ 107, 185, 129, 91, 210, 129, 181, 211, 122 };
+    int high_H[] = { 17, 12, 12, 11, 13, 14, 14, 16, 16, 13, 15, 18, 12, 12, 14, 17, 17, 15, 15, 13, 13, 9, 18, 25, /*180, 100, 180, 175,*/ 38, 19 };
+    int high_S[] = { 183, 117, 113, 116, 114, 186, 184, 168, 148, 126, 148, 150, 117, 116, 144, 236, 135, 155, 138, 102, 104, /*66, 66,*/ 173, 104, 96, 145, /*81,*/ /*47,*/ 171, };
     int high_V[] = { 253, 255, 253, 213, 255, 199, 192, 255, 235, 222, 225, 146, 189, 207, 173, 204, 180, 154, 185, 211, 171, 231, 155, 255, 255, 255, 255, 255, 255, 157 };
+    int total_low_H = accumulate(begin(low_H), end(low_H), 0, plus<int>());
+    int total_low_S = accumulate(begin(low_S), end(low_S), 0, plus<int>());
+    int total_low_V = accumulate(begin(low_V), end(low_V), 0, plus<int>());
+    int total_high_V = accumulate(begin(high_V), end(high_V), 0, plus<int>());
+    int total_high_S = accumulate(begin(high_S), end(high_S), 0, plus<int>());
+    int total_high_H = accumulate(begin(high_H), end(high_H), 0, plus<int>());
     /*cout << sizeof(low_H) / sizeof(low_H[0]);*/
 
     //MEAN
-    thresh_low_H = accumulate(begin(low_H), end(low_H), 0, plus<int>()) / 30;
-    thresh_low_S = accumulate(begin(low_S), end(low_S), 0, plus<int>()) / 30;
-    thresh_low_V = accumulate(begin(low_V), end(low_V), 0, plus<int>()) / 30;
-    thresh_high_V = accumulate(begin(high_V), end(high_V), 0, plus<int>()) / 30;
-    thresh_high_S = accumulate(begin(high_S), end(high_S), 0, plus<int>()) / 30;
-    thresh_high_H = accumulate(begin(high_H), end(high_H), 0, plus<int>()) / 30;
-    inRange(src_HSV, Scalar(thresh_low_H, thresh_low_S, thresh_low_V), Scalar(thresh_high_H, thresh_high_S, thresh_high_V), scr_threshold);
+    thresh_low_H = total_low_H / 30;
+    thresh_low_S = total_low_S / 28;
+    thresh_low_V = total_low_V / 26;
+    thresh_high_V = total_high_V / 30;
+    thresh_high_S = total_high_S / 26;
+    thresh_high_H = total_high_H / 26;
 
-    //MEDIAN
-    sort(low_H, low_H + (30));
-    sort(low_S, low_S + (30));
-    sort(low_V, low_V + (30));
-    sort(high_H, high_H + (30));
-    sort(high_S, high_S + (30)));
-    sort(high_V, high_V + (30));
+    //MEDIAN (**been tested. not a good idea**)
+    /*sort(low_H, low_H + (sizeof(low_H) / sizeof(low_H[0])));
+    sort(low_S, low_S + (sizeof(low_S) / sizeof(low_S[0])));
+    sort(low_V, low_V + (sizeof(low_V) / sizeof(low_V[0])));
+    sort(high_H, high_H + (sizeof(high_H) / sizeof(high_H[0])));
+    sort(high_S, high_S + (sizeof(high_S) / sizeof(high_S[0])));
+    sort(high_V, high_V + (sizeof(high_V) / sizeof(high_V[0])));
     int med_low_H = (low_H[30 / 2] + low_H[(30 / 2) - 1]) / 2;
     int med_low_S = (low_S[30 / 2] + low_S[(30 / 2) - 1]) / 2;
     int med_low_V = (low_V[30 / 2] + low_V[(30 / 2) - 1]) / 2;
     int med_high_H = (high_H[30 / 2] + high_H[(30 / 2) - 1]) / 2;
     int med_high_S = (high_S[30 / 2] + high_S[(30 / 2) - 1]) / 2;
-    int med_high_V = (high_V[30 / 2] + high_V[(30 / 2) - 1]) / 2;
-    inRange(src_HSV, Scalar(med_low_H, med_low_S, med_low_V), Scalar(med_high_H, med_high_S, med_high_V), scr_threshold);
-
-    //MODE
-    //.
-    //.
-    //.
-
-    
-    
+    int med_high_V = (high_V[30 / 2] + high_V[(30 / 2) - 1]) / 2;*/
 
 
 }
 
 
 /*
-1. convert to HSV
-2. do thresholding in each color channel
-3. morphological operations for removing false positives (false hands) AND highlighting the hands better
-4. using a binary mask, select the hands --> color the result and copy it on the original image
-4'. find contours
+1.      convert to HSV
+2.      do thresholding in each color channel
+3.      morphological operations for removing false positives (false hands) AND highlighting the hands better
+4.      using a binary mask, select the hands --> color the result and copy it on the original image
+4'.     find contours
 */
 int main(int argc, char** argv)
 {
-    //CommandLineParser parser(argc, argv, "{@input | fruits.jpg | input image}");
-    //src = imread(samples::findFile(parser.get<String>("@input")), IMREAD_COLOR); // Load an image
-
-    int choice;
-    cout << "Enter 1 for object detection, 2 for segmentation: \n";
+    int choice, im_num;
+    Mat src, frame_HSV, frame_threshold;
+    char key;
+    cout << "Enter 1 for threshold trackbars, 2 for segmentation: \n";
     cin >> choice;
     switch (choice) {
-    case 1:
-        cout << "nothign yet haha";
-        break;
     case 2:
-        namedWindow(window_detection_name, WINDOW_NORMAL);
+        while (true) {
+            //CommandLineParser parser(argc, argv, "{@input | fruits.jpg | input image}");
+            //src = imread(samples::findFile(parser.get<String>("@input")), IMREAD_COLOR); // Load an image
+
+            /*cout << "enter the number of the image: ";
+            cin >> im_num;
+            cout << typeid(to_string(im_num)).name();
+            src = imread(to_string(im_num)+".jpg", IMREAD_COLOR);*/
+            src = imread("17.jpg", IMREAD_COLOR);
+            if (src.empty())
+            {
+                std::cout << "Could not open or find the image!\n" << std::endl;
+                std::cout << "Usage: " << argv[0] << " <Input image>" << std::endl;
+                //return -1;
+                break;
+            }
+            //convert to HSV
+            cvtColor(src, frame_HSV, COLOR_BGR2HSV);
+            //in-range thresholding
+            computeThresholds();
+            inRange(frame_HSV, Scalar(thresh_low_H, thresh_low_S, thresh_low_V), Scalar(thresh_high_H, thresh_high_S, thresh_high_V), frame_threshold);
+            namedWindow(window_segmentation_name, WINDOW_NORMAL);
+            imshow(window_segmentation_name, frame_threshold);
+            key = (char)waitKey(30);
+            if (key == 'q' || key == 27)
+            {
+                break;
+            }
+        }
+        break;
+    case 1:
+
 
         // Trackbars to set thresholds for HSV values
-        createTrackbar("Low H", window_detection_name, &low_H, max_value_H, on_low_H_thresh_trackbar);
-        createTrackbar("High H", window_detection_name, &high_H, max_value_H, on_high_H_thresh_trackbar);
-        createTrackbar("Low S", window_detection_name, &low_S, max_value, on_low_S_thresh_trackbar);
-        createTrackbar("High S", window_detection_name, &high_S, max_value, on_high_S_thresh_trackbar);
-        createTrackbar("Low V", window_detection_name, &low_V, max_value, on_low_V_thresh_trackbar);
-        createTrackbar("High V", window_detection_name, &high_V, max_value, on_high_V_thresh_trackbar);
+        createTrackbar("Low H", window_segmentation_name, &low_H, max_value_H, on_low_H_thresh_trackbar);
+        createTrackbar("High H", window_segmentation_name, &high_H, max_value_H, on_high_H_thresh_trackbar);
+        createTrackbar("Low S", window_segmentation_name, &low_S, max_value, on_low_S_thresh_trackbar);
+        createTrackbar("High S", window_segmentation_name, &high_S, max_value, on_high_S_thresh_trackbar);
+        createTrackbar("Low V", window_segmentation_name, &low_V, max_value, on_low_V_thresh_trackbar);
+        createTrackbar("High V", window_segmentation_name, &high_V, max_value, on_high_V_thresh_trackbar);
 
-        Mat frame_HSV, frame_threshold;
+        namedWindow(window_segmentation_name, WINDOW_NORMAL);
 
         while (true) {
-            Mat src = imread("30.jpg", IMREAD_COLOR);
+            src = imread("30.jpg", IMREAD_COLOR);
             if (src.empty())
             {
                 std::cout << "Could not open or find the image!\n" << std::endl;
@@ -261,8 +280,8 @@ int main(int argc, char** argv)
    /*         int width = 1200;
             int height = 800;*/
             //resizeWindow(int(width * (height - 80) / height), height - 80);
-            imshow(window_detection_name, frame_threshold);
-            char key = (char)waitKey(30);
+            imshow(window_segmentation_name, frame_threshold);
+            key = (char)waitKey(30);
             if (key == 'q' || key == 27)
             {
                 break;
@@ -270,7 +289,7 @@ int main(int argc, char** argv)
         }
         //Mat binarized = binarization(frame_threshold);
         Mat mask = cv::imread("01.png", IMREAD_UNCHANGED);
-        computeThresholds(src);
+        computeThresholds();
         //performOpening(frame_threshold, MORPH_RECT, { 3, 3 }, mask);
 
         //mask = Mat::zeros(frame_threshold.size(), CV_8UC1);
