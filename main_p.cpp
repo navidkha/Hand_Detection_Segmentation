@@ -280,14 +280,14 @@ int main(int argc, char** argv)
             break;
         }
         //step 0: erosion on hsv image
-        //cvtColor(src, frame_HSV, COLOR_BGR2HSV); //convert RGB to HSV
-        //eroded = performErosion(frame_HSV);
+        cvtColor(src, frame_HSV, COLOR_BGR2HSV); //convert RGB to HSV
+        eroded = performErosion(frame_HSV);
 
 
         //step 1: thresholding  
         computeThresholds(); //update the global threshold variables
-        cvtColor(src, frame_HSV, COLOR_BGR2HSV); //convert RGB to HSV
-        inRange(frame_HSV, Scalar(thresh_low_H, thresh_low_S, thresh_low_V), Scalar(thresh_high_H, thresh_high_S, thresh_high_V), frame_threshold); //inRange thresholding
+        //cvtColor(src, frame_HSV, COLOR_BGR2HSV); //convert RGB to HSV
+        inRange(eroded, Scalar(thresh_low_H, thresh_low_S, thresh_low_V), Scalar(thresh_high_H, thresh_high_S, thresh_high_V), frame_threshold); //inRange thresholding
         //step 2: openening followed by dialtion
         output_morph = performOpening(frame_threshold, MORPH_RECT, { 3, 3 });
         //step 3: find contours
