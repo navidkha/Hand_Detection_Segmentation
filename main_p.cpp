@@ -10,12 +10,15 @@ using namespace std;
 
 const int max_value_H = 360 / 2;
 const int max_value = 255;
-const String window_segmentation_name = "Object Detection";
+const String window_segmentation_name = "Segmentation";
+const char* window_name = "Edge Map";
+const String  window_detection_name = "the thing";
 int low_H = 0, low_S = 0, low_V = 0;
 int high_H = max_value_H, high_S = max_value, high_V = max_value;
 int thresh_low_H = 0; int thresh_low_S = 0; int thresh_low_V = 0; int thresh_high_H = 0;
 int thresh_high_S = 0; int thresh_high_V = 0;
 int med_low_H, med_low_S, med_low_V, med_high_H, med_high_S, med_high_V;
+
 
 static void on_low_H_thresh_trackbar(int, void*)
 {
@@ -49,9 +52,13 @@ static void on_high_V_thresh_trackbar(int, void*)
 }
 
 
+
 void masking(Mat image, Mat binMask) {
+    cout << "in masking" << endl;
     cv::Mat dstImage = cv::Mat::zeros(image.size(), image.type());
+    cout << binMask.size << " ,  " << image.size() << endl;
     //binMask = Mat::zeros(image.size(), CV_8UC1);
+    //I assume you want to draw the circle at the center of your image, with a radius of 50
     cv::circle(binMask, cv::Point(binMask.cols / 2, binMask.rows / 2), 50, cv::Scalar(255, 0, 0), -1, 8, 0);
 
     //Now you can copy your source image to destination image with masking
@@ -61,60 +68,118 @@ void masking(Mat image, Mat binMask) {
     waitKey(0);
 }
 
+int getMaxAreaContourId(vector <vector<cv::Point>> contours) {
+    double maxArea = 0;
+    double newArea = 0;
+    int maxAreaContourId = -1;
 
-void findContour(Mat binImage) {
-    vector<vector<Point>> contours;
-    vector<Vec4i> hierarchy;
-    Mat contours_image = Mat::zeros(binImage.size(), CV_8UC3); //initially there are no contours so all 0s
+    for (int j = 0; j < contours.size(); j++) {
+        newArea = cv::contourArea(contours.at(j));
+        cout << newArea << " area of the contour " << j << endl;
+        if (newArea > maxArea) {
+            maxArea = newArea;
+            maxAreaContourId = j;
 
-    findContours(binImage, contours, hierarchy, RETR_EXTERNAL, CHAIN_APPROX_NONE);
+        } // End if
+    } // End for
+    return maxAreaContourId;
+}
 
-    // we need at least one contour to work
-    if (contours.size() <= 0)
-        cout << "oops\n";
-
-    // find the biggest contour (let's suppose it's our hand)
-    int biggest_contour_index = -1;
-    double biggest_area = 0.0;
-
-    for (int i = 0; i < contours.size(); i++) {
-        double area = contourArea(contours[i], false);
-        if (area > biggest_area) {
-            biggest_area = area; //we hope this corresponds to the hand
-            biggest_contour_index = i;
+vector<int> getContoursIDs(vector <vector<cv::Point>> contours) {
+    vector<int> selectedContours;
+    double contourArea;
+    int contThreshold = 10;
+    for (int j = 0; j < contours.size(); j++) {
+        contourArea = cv::contourArea(contours.at(j));
+        if (contourArea >= contThreshold) {
+            selectedContours.push_back(j); //add contour ID to the vector
+            cout << contourArea << " is bigger than threshold" << contThreshold << endl;
         }
     }
-    cout << "biggest area" << biggest_area << endl;
-    if (biggest_contour_index < 0)
-        cout << "oops again\n";
+    return selectedContours;
+}
 
-    vector<Point> hull_points;
-    vector<int> hull_ints;
+Mat findContour(Mat binImage) {
+    vector<vector<Point>> contours; //Detected contours. Each contour is stored as a vector of points
+    vector<Vec4i> hierarchy; //has as many elements as the number of contours
+    int max_area_contourID;
+    Mat dst = Mat::zeros(binImage.rows, binImage.cols, CV_8UC3);
+    Mat contours_image = Mat::zeros(binImage.size(), CV_8UC3); //initially there are no contours so all 0s
 
-    // for drawing the convex hull and for finding the bounding rectangle
-    convexHull(Mat(contours[biggest_contour_index]), hull_points, true);
+    //find all contours in the binary image
+    findContours(binImage, contours, hierarchy, RETR_EXTERNAL, CHAIN_APPROX_NONE);
 
-    // for finding the defects
-    convexHull(Mat(contours[biggest_contour_index]), hull_ints, false);
+    //find the contour ID corresponding to the one with the max area (hopefully the hand!)
+    max_area_contourID = getMaxAreaContourId(contours);
 
-    // we need at least 3 points to find the defects
-    vector<Vec4i> defects;
-    if (hull_ints.size() > 3)
-        convexityDefects(Mat(contours[biggest_contour_index]), hull_ints, defects);
-    else
-        cout << "oops again haha\n";
-    // we bound the convex hull
-    Rect bounding_rectangle = boundingRect(Mat(hull_points));
+    //draw the contour with the max area only (segmenting one hand only)
+    Scalar color(rand() & 255, rand() & 255, rand() & 255); //chooses a color in RGB, with random values in each color channel
+    drawContours(dst, contours, -1, color, FILLED, 8, hierarchy); //note the parameter FILLED
 
-    // we find the center of the bounding rectangle, this should approximately also be the center of the hand
-    Point center_bounding_rect(
-        (bounding_rectangle.tl().x + bounding_rectangle.br().x) / 2,
-        (bounding_rectangle.tl().y + bounding_rectangle.br().y) / 2
-    );
+    return dst;
 
-    // we separate the defects keeping only the ones of intrest
-    vector<Point> start_points;
-    vector<Point> far_points;
+    // we need at least one contour to work
+    //if (contours.size() <= 0)
+    //    cout << "oops\n";
+
+    //// find the biggest contour (let's suppose it's our hand)
+    //int biggest_contour_index = -1;
+    //double biggest_area = 0.0;
+
+    //for (int i = 0; i < contours.size(); i++) {
+    //    double area = contourArea(contours[i], false); //contourArea computes the area of the given contour
+    //    if (area > biggest_area) {
+    //        biggest_area = area; //we hope this corresponds to the hand
+    //        biggest_contour_index = i;
+    //    }
+    //}
+    //cout << "biggest area" << biggest_area << endl;
+    //if (biggest_contour_index < 0)
+    //    cout << "oops again\n";
+
+    //vector<Point> hull_points; //points comprising the convex hull
+    //vector<int> hull_ints;
+
+    //// for drawing the convex hull and for finding the bounding rectangle
+    //convexHull(Mat(contours[biggest_contour_index]), hull_points, true);
+
+    //// for finding the defects
+    //convexHull(Mat(contours[biggest_contour_index]), hull_ints, false);
+
+    //// we need at least 3 points to find the defects
+    //vector<Vec4i> defects;
+    //if (hull_ints.size() > 3)
+    //    convexityDefects(Mat(contours[biggest_contour_index]), hull_ints, defects);
+    //else
+    //    return contours_image;
+
+    //// we bound the convex hull
+    //Rect bounding_rectangle = boundingRect(Mat(hull_points));
+
+    //// for drawing the convex hull and for finding the bounding rectangle
+    //convexHull(Mat(contours[biggest_contour_index]), hull_points, true);
+
+    //// for finding the defects
+    //convexHull(Mat(contours[biggest_contour_index]), hull_ints, false);
+
+    //// we need at least 3 points to find the defects
+    //vector<Vec4i> defects;
+    //if (hull_ints.size() > 3)
+    //    convexityDefects(Mat(contours[biggest_contour_index]), hull_ints, defects);
+    //else
+    //    cout << "oops again haha\n";
+    //// we bound the convex hull
+    //Rect bounding_rectangle = boundingRect(Mat(hull_points));
+
+    //// we find the center of the bounding rectangle, this should approximately also be the center of the hand
+    //Point center_bounding_rect(
+    //    (bounding_rectangle.tl().x + bounding_rectangle.br().x) / 2,
+    //    (bounding_rectangle.tl().y + bounding_rectangle.br().y) / 2
+    //);
+
+    //// we separate the defects keeping only the ones of intrest
+    //vector<Point> start_points;
+    //vector<Point> far_points;
 
     //for (int i = 0; i < defects.size(); i++) {
     //    start_points.push_back(contours[biggest_contour_index][defects[i].val[0]]);
@@ -129,39 +194,26 @@ void findContour(Mat binImage) {
     //vector<Point> filtered_far_points = compactOnNeighborhoodMedian(far_points, bounding_rectangle.height * BOUNDING_RECT_NEIGHBOR_DISTANCE_SCALING);
 }
 
-
 /*After binarization the image resulted a bit noisy, because of false positives.
 To clean the image and remove the false positives, an opening operator is applied,
 with a 3x3 circular structuring element.
-A dilation is also applied, just in case parts of the hand have been detached
-after binarization (sometimes fingers are detached from the hand).*/
-void performOpening(Mat binaryImage, int kernelShape, Point kernelSize, Mat binMask) {
-    int morph_size = 2;
+A dilation is also applied, just in case parts of the hand have been detached.*/
+Mat performOpening(Mat binaryImage, int kernelShape, Point kernelSize) {
 
-    // Create structuring element
-    //Mat element = getStructuringElement(
-    //    MORPH_RECT,
-    //    Size(2 * morph_size + 1,
-    //        2 * morph_size + 1),
-    //    Point(morph_size, morph_size));
-    //Mat output;
-
-    //// Closing
-    //morphologyEx(binaryImage, output,
-    //    MORPH_CLOSE, element,
-    //    Point(-1, -1), 2);
     Mat structuringElement = getStructuringElement(kernelShape, kernelSize);
     morphologyEx(binaryImage, binaryImage, MORPH_OPEN, structuringElement);
     dilate(binaryImage, binaryImage, Mat(), Point(-1, -1), 3);
-    Mat dst;
-    //medianBlur(binaryImage, dst, 3);
-   /* namedWindow(window_name, WINDOW_AUTOSIZE);
-    imshow(window_name, binaryImage);
-    waitKey(0);*/
-    masking(binaryImage, binMask);
+    return binaryImage;
 }
 
+Mat performErosion(Mat originalImage) {
 
+    //if Mat(), a 3 x 3 rectangular structuring element is used
+    Mat structuringElement = getStructuringElement(MORPH_RECT, { 5, 5 });
+    erode(originalImage, originalImage, structuringElement, Point(-1, -1), 2);
+    /*morphologyEx(originalImage, originalImage, MORPH_OPEN, structuringElement);*/
+    return originalImage;
+}
 void computeThresholds() {
     int low_H[] = { 10, 5, 1, 1, 0, 0, 0, 9, 3, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 7, 0, 0 ,9, 0 ,3, 0, 4 };
     int low_S[] = { 76, 20, 31, 75, 14, 40, 25, 10, 0, 24, 60, 75, 47, 40, 39, 75, 55, 63, 55, 64, 65, 68, /*105,*/ 72, 66, 62, 61, 62, 62, /*121,*/ };
@@ -202,68 +254,65 @@ void computeThresholds() {
 
 }
 
-
 /*
 1.      convert to HSV
 2.      do thresholding in each color channel
-3.      morphological operations for removing false positives (false hands) AND highlighting the hands better
+3.      morphological operations for highlighting the hands better
 4.      using a binary mask, select the hands --> color the result and copy it on the original image
 4'.     find contours
 */
+
 int main(int argc, char** argv)
 {
     int choice, im_num;
-    Mat src, frame_HSV, frame_threshold;
-    char key;
-    cout << "Enter 1 for threshold trackbars, 2 for segmentation: \n";
+    Mat src, frame_HSV, frame_threshold, output_morph, output_contour, final_image, eroded;
+
+    cout << "Enter 1 for segmentation, 2 for thresholding trackbars: \n";
     cin >> choice;
     switch (choice) {
-    case 2:
-        while (true) {
-            //CommandLineParser parser(argc, argv, "{@input | fruits.jpg | input image}");
-            //src = imread(samples::findFile(parser.get<String>("@input")), IMREAD_COLOR); // Load an image
-
-            /*cout << "enter the number of the image: ";
-            cin >> im_num;
-            cout << typeid(to_string(im_num)).name();
-            src = imread(to_string(im_num)+".jpg", IMREAD_COLOR);*/
-            src = imread("17.jpg", IMREAD_COLOR);
-            if (src.empty())
-            {
-                std::cout << "Could not open or find the image!\n" << std::endl;
-                std::cout << "Usage: " << argv[0] << " <Input image>" << std::endl;
-                //return -1;
-                break;
-            }
-            //convert to HSV
-            cvtColor(src, frame_HSV, COLOR_BGR2HSV);
-            //in-range thresholding
-            computeThresholds();
-            inRange(frame_HSV, Scalar(thresh_low_H, thresh_low_S, thresh_low_V), Scalar(thresh_high_H, thresh_high_S, thresh_high_V), frame_threshold);
-            namedWindow(window_segmentation_name, WINDOW_NORMAL);
-            imshow(window_segmentation_name, frame_threshold);
-            key = (char)waitKey(30);
-            if (key == 'q' || key == 27)
-            {
-                break;
-            }
-        }
-        break;
     case 1:
+        src = imread("12.jpg", IMREAD_COLOR);
+        if (src.empty())
+        {
+            std::cout << "Could not open or find the image!\n" << std::endl;
+            std::cout << "Usage: " << argv[0] << " <Input image>" << std::endl;
+            //return -1;
+            break;
+        }
+        //step 0: erosion on hsv image
+        //cvtColor(src, frame_HSV, COLOR_BGR2HSV); //convert RGB to HSV
+        //eroded = performErosion(frame_HSV);
 
 
+        //step 1: thresholding  
+        computeThresholds(); //update the global threshold variables
+        cvtColor(src, frame_HSV, COLOR_BGR2HSV); //convert RGB to HSV
+        inRange(frame_HSV, Scalar(thresh_low_H, thresh_low_S, thresh_low_V), Scalar(thresh_high_H, thresh_high_S, thresh_high_V), frame_threshold); //inRange thresholding
+        //step 2: openening followed by dialtion
+        output_morph = performOpening(frame_threshold, MORPH_RECT, { 3, 3 });
+        //step 3: find contours
+        output_contour = findContour(output_morph);
+        // copy only non-zero pixels from your image to original image
+        final_image = cv::Mat::zeros(src.size(), src.type());
+        final_image.copyTo(src, output_contour != 0);
+
+        namedWindow(window_detection_name, WINDOW_NORMAL);
+        imshow(window_detection_name, output_contour);
+        waitKey(0);
+        break;
+
+    case 2:
+        namedWindow(window_detection_name, WINDOW_NORMAL);
         // Trackbars to set thresholds for HSV values
-        createTrackbar("Low H", window_segmentation_name, &low_H, max_value_H, on_low_H_thresh_trackbar);
-        createTrackbar("High H", window_segmentation_name, &high_H, max_value_H, on_high_H_thresh_trackbar);
-        createTrackbar("Low S", window_segmentation_name, &low_S, max_value, on_low_S_thresh_trackbar);
-        createTrackbar("High S", window_segmentation_name, &high_S, max_value, on_high_S_thresh_trackbar);
-        createTrackbar("Low V", window_segmentation_name, &low_V, max_value, on_low_V_thresh_trackbar);
-        createTrackbar("High V", window_segmentation_name, &high_V, max_value, on_high_V_thresh_trackbar);
-
-        namedWindow(window_segmentation_name, WINDOW_NORMAL);
+        createTrackbar("Low H", window_detection_name, &low_H, max_value_H, on_low_H_thresh_trackbar);
+        createTrackbar("High H", window_detection_name, &high_H, max_value_H, on_high_H_thresh_trackbar);
+        createTrackbar("Low S", window_detection_name, &low_S, max_value, on_low_S_thresh_trackbar);
+        createTrackbar("High S", window_detection_name, &high_S, max_value, on_high_S_thresh_trackbar);
+        createTrackbar("Low V", window_detection_name, &low_V, max_value, on_low_V_thresh_trackbar);
+        createTrackbar("High V", window_detection_name, &high_V, max_value, on_high_V_thresh_trackbar);
 
         while (true) {
-            src = imread("30.jpg", IMREAD_COLOR);
+            src = imread("24.jpg", IMREAD_COLOR);
             if (src.empty())
             {
                 std::cout << "Could not open or find the image!\n" << std::endl;
@@ -280,30 +329,15 @@ int main(int argc, char** argv)
    /*         int width = 1200;
             int height = 800;*/
             //resizeWindow(int(width * (height - 80) / height), height - 80);
-            imshow(window_segmentation_name, frame_threshold);
-            key = (char)waitKey(30);
+            imshow(window_detection_name, frame_threshold);
+            char key = (char)waitKey(30);
             if (key == 'q' || key == 27)
             {
                 break;
             }
         }
-        //Mat binarized = binarization(frame_threshold);
-        Mat mask = cv::imread("01.png", IMREAD_UNCHANGED);
-        computeThresholds();
-        //performOpening(frame_threshold, MORPH_RECT, { 3, 3 }, mask);
-
-        //mask = Mat::zeros(frame_threshold.size(), CV_8UC1);
-        //findContour(frame_threshold);
-
-        /* cout << low_H<<endl;
-         cout << high_H << endl;
-         cout << low_S << endl;
-         cout << high_S << endl;
-         cout << low_V << endl;
-         cout << high_V << endl;*/
+        Mat mask = cv::imread("04.png", IMREAD_UNCHANGED);
         break;
-
     }
-
     return 0;
 }
