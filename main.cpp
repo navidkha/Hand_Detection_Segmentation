@@ -1,55 +1,76 @@
-#include "opencv2/imgproc.hpp"
-#include "opencv2/highgui.hpp"
 #include <iostream>
-#include <vector>
+#include <fstream>
+#include <opencv2/opencv.hpp>
+#include <opencv2/dnn.hpp>
+#include <opencv2/dnn/all_layers.hpp>
 
+using namespace std;
 using namespace cv;
-RNG rng(12345);
-
-Mat src, src_gray;
-Mat dst, detected_edges, opening;
-
-int lowThreshold = 0;
-int highThreshold = 350;
-const int max_lowThreshold = 1000;
-const int max_highThreshold = 1000;
-const int kernel_size = 3;
-const char* window_name = "Edge Map";
+using namespace dnn;
 
 
-static void CannyThreshold(int, void*)
-{
-    blur( src_gray, detected_edges, Size(3,3) );
-    Canny( detected_edges, detected_edges, lowThreshold, highThreshold, kernel_size );
-    imshow( window_name, detected_edges );
-    Mat element = getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3));
-  
-    // Opening
-    morphologyEx(detected_edges, opening, MORPH_DILATE, element, Point(-1, -1), 1);
-    imshow("Opening", opening);
-}
-
-
-int main( int argc, char** argv )
-{
-  src = imread("01.jpg");
-  cvtColor( src, src_gray, COLOR_BGR2GRAY );
-  imshow("source",src);
-  namedWindow( window_name, WINDOW_AUTOSIZE );
-  createTrackbar( "Min Threshold:", window_name, &lowThreshold, max_lowThreshold, CannyThreshold );
-  createTrackbar( "Max Threshold:", window_name, &highThreshold, max_highThreshold, CannyThreshold );
-  CannyThreshold(0, 0);
+int main(int, char**){
     
-    std::vector<std::vector<Point> > contours;
-    std::vector<Vec4i> hierarchy;
-    findContours(opening, contours, hierarchy, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
-    Mat drawing = Mat::zeros( src.size(), CV_8UC3 );
-    for( size_t i = 0; i< contours.size(); i++ )
-    {
-        Scalar color = Scalar( rng.uniform(0, 256), rng.uniform(0,256), rng.uniform(0,256) );
-        drawContours( drawing, contours, (int)i, color, 2, LINE_8, hierarchy, 0 );
-    }
-        imshow( "Contours", drawing );
-  waitKey(0);
-  return 0;
+    string file_path = ""; //specify the file path
+    string class_name = "person"; //change to just string
+    ifstream ifs(string(file_path + "object_detection_classes_coco.txt").c_str());
+    string line;
+    
+    //read neural networks from the files
+    auto net = readNet("frozen_inference_graph.pb", "graph.pbtxt", "TensorFlow");
+    
+
+    
+    // CAN ADD GPU
+    // net.setPreferableBackend(DNN_BACKEND_CUDA);
+    // net.setPreferableTarget(DNN_TARGET_CUDA);
+    
+    
+    // Set a min confidence score for the detections
+    float min_confidente_score = 0.5;
+    
+    
+        
+        // load image
+        Mat image = imread("26.jpg");
+        
+        int image_height = image.cols;
+        int image_width = image.rows;
+        
+        
+        auto start = getTickCount();
+        
+        //create a blob from the image
+        Mat blob = blobFromImage(image, 1.0, Size(300,300), Scalar(127.5, 127.5, 127.5), true, false);
+        // set the blob to be input of the neural network
+
+        net.setInput(blob);
+        
+        //forward pass of the blob
+        Mat output = net.forward();
+        cout<< output.size();
+        auto end = getTickCount();
+        
+        
+        // matrix with all the detections
+        Mat results(output.size[2], output.size[3], CV_32F, output.ptr<float>());
+        
+        //Run through all the predictions
+        for (int i = 0; i < results.rows; i++){
+            int class_id = int(results.at<float>(i, 1));
+            int confidence = results.at<float>(i, 2);
+            
+            // Check if the detection is over the min threshold and then draw BB
+            if (confidence > min_confidente_score){
+                int bboxX = int(results.at<float>(i, 3) * image.cols);
+                int bboxY = int(results.at<float>(i, 4) * image.rows);
+                int bboxWidth = int(results.at<float>(i, 5) * image.cols - bboxX);
+                int bboxHeight = int(results.at<float>(i, 6) * image.rows - bboxY);
+                rectangle(image, Point(bboxX, bboxY), Point(bboxX + bboxWidth, bboxY + bboxHeight), Scalar(0, 0, 255), 2);
+            }
+        }
+        
+        imshow("image", image);
+    
+    return 0;
 }
